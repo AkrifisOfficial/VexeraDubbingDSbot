@@ -178,14 +178,9 @@ def run_bot():
         logger.exception(f"💥 Критическая ошибка при запуске бота: {e}")
 
 def run_flask():
-    """Запуск Flask сервера"""
-    logger.info(f"🌐 Запуск веб-сервера на порту {PORT}")
-    try:
-        app.run(host='0.0.0.0', port=PORT, use_reloader=False)
-    except OSError as e:
-        logger.critical(f"🔌 Ошибка порта {PORT}: {e}")
-    except Exception as e:
-        logger.exception(f"💥 Критическая ошибка веб-сервера: {e}")
+    """Запуск Flask сервера через Gunicorn будет в start.sh"""
+    # Эта функция больше не используется напрямую
+    pass
 
 if __name__ == "__main__":
     logger.info("="*50)
@@ -195,17 +190,5 @@ if __name__ == "__main__":
     # Проверка токена перед запуском
     logger.info(f"🔒 Используется токен: {DISCORD_TOKEN[:10]}...")
     
-    # Запуск Discord бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot, name="DiscordBot")
-    bot_thread.daemon = True
-    bot_thread.start()
-    
-    # Даем боту время на подключение
-    import time
-    time.sleep(5)
-    
-    # Запуск Flask сервера в основном потоке
-    if bot_thread.is_alive():
-        run_flask()
-    else:
-        logger.critical("❌ Discord бот не запустился. Веб-сервер не запущен.")
+    # Запуск Discord бота
+    run_bot()
