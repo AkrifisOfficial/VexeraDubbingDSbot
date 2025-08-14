@@ -6,12 +6,13 @@ from flask import Flask, request, jsonify
 import hmac
 import hashlib
 import asyncio
+import threading
 
 # Конфигурация
 DISCORD_TOKEN = os.getenv('MTQwNTU3OTQzNjQ0NjcxNjA2NQ.GzIIiZ.6SOxH-SrIpO5Ro-dGfWwtlpd4icw6vpwMv2PJQ')
 CHANNEL_ID = int(os.getenv('1382970034904629392'))
 GITHUB_WEBHOOK_SECRET = os.getenv('9185b27dd2072940301feea9fdc72630')
-PORT = int(os.getenv('PORT', 5000))
+PORT = int(os.getenv('PORT', 5000)) # Используем порт 8000 по умолчанию
 
 # Инициализация приложений
 intents = discord.Intents.default()
@@ -113,17 +114,7 @@ async def send_release_notification(release):
         name="Версия", 
         value=release.get('tag_name', 'v1.0.0')
     )
-    
-    # Опционально: добавление превью
-    if 'assets' in release and release['assets']:
-        first_asset = release['assets'][0]
-        if first_asset['content_type'].startswith('image/'):
-            embed.set_thumbnail(url=first_asset['browser_download_url'])
-    
-    embed.set_footer(
-        text="VexeraDubbing",
-        icon_url="https://s.iimg.su/s/14/gpoeAFfxQzTomz8sVJov06CIg7aoGPgAm6u2BzjA.jpg"  # Замените на URL вашего лого
-    )
+    embed.set_footer(text="VexeraDubbing")
     
     await channel.send(
         content="@everyone Новая серия готова к просмотру! 🎉",
@@ -135,8 +126,6 @@ def run_bot():
     bot.run(DISCORD_TOKEN)
 
 if __name__ == "__main__":
-    import threading
-    
     # Запуск Discord бота в отдельном потоке
     bot_thread = threading.Thread(target=run_bot)
     bot_thread.daemon = True
