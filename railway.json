@@ -1,0 +1,8 @@
+{
+  "build": {
+    "nixpacks": {
+      "provider": "nixpacks",
+      "startCommand": "bash start.sh"
+    }
+  }
+}
