@@ -17,10 +17,10 @@ logging.basicConfig(
 logger = logging.getLogger('VexeraBot')
 
 # Конфигурация
-DISCORD_TOKEN = os.getenv('MTQwNTU3OTQzNjQ0NjcxNjA2NQ.GzIIiZ.6SOxH-SrIpO5Ro-dGfWwtlpd4icw6vpwMv2PJQ')
-CHANNEL_ID = int(os.getenv('1382970034904629392'))
-GITHUB_WEBHOOK_SECRET = os.getenv('9185b27dd2072940301feea9fdc72630')
-PORT = int(os.getenv('PORT', 5000))
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
+GITHUB_WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET')
+PORT = int(os.getenv('PORT', 8000))
 
 # Инициализация приложений
 intents = discord.Intents.default()
