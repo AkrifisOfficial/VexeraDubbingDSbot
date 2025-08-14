@@ -7,22 +7,36 @@ import hmac
 import hashlib
 import asyncio
 import threading
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('VexeraBot')
 
 # Конфигурация
 DISCORD_TOKEN = os.getenv('MTQwNTU3OTQzNjQ0NjcxNjA2NQ.GzIIiZ.6SOxH-SrIpO5Ro-dGfWwtlpd4icw6vpwMv2PJQ')
 CHANNEL_ID = int(os.getenv('1382970034904629392'))
 GITHUB_WEBHOOK_SECRET = os.getenv('9185b27dd2072940301feea9fdc72630')
-PORT = int(os.getenv('PORT', 5000)) # Используем порт 8000 по умолчанию
+PORT = int(os.getenv('PORT', 5000))
 
 # Инициализация приложений
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+
+bot = commands.Bot(
+    command_prefix='!', 
+    intents=intents,
+    help_command=None
+)
+
 app = Flask(__name__)
 
 @bot.event
 async def on_ready():
-    print(f'✅ Бот {bot.user} успешно запущен!')
+    logger.info(f'✅ Бот {bot.user} успешно запущен!')
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching, 
         name="за релизами VexeraDubbing"
@@ -31,9 +45,9 @@ async def on_ready():
     # Синхронизация команд
     try:
         synced = await bot.tree.sync()
-        print(f"🔄 Синхронизировано {len(synced)} команд")
+        logger.info(f"🔄 Синхронизировано {len(synced)} команд")
     except Exception as e:
-        print(f"❌ Ошибка синхронизации команд: {e}")
+        logger.error(f"❌ Ошибка синхронизации команд: {e}")
 
 # Слэш-команда /ping
 @bot.tree.command(name="ping", description="Проверка работоспособности бота")
@@ -53,7 +67,7 @@ def github_webhook():
         payload = request.data
         
         if not verify_signature(payload, signature, GITHUB_WEBHOOK_SECRET):
-            print("❌ Неверная подпись вебхука")
+            logger.error("❌ Неверная подпись вебхука")
             return jsonify({"status": "invalid signature"}), 401
 
         # Обработка релиза
@@ -66,12 +80,12 @@ def github_webhook():
                     send_release_notification(release), 
                     bot.loop
                 )
-                print(f"🚀 Уведомление о релизе: {release['tag_name']}")
+                logger.info(f"🚀 Уведомление о релизе: {release['tag_name']}")
                 
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
-        print(f"🔥 Ошибка обработки вебхука: {e}")
+        logger.exception(f"🔥 Ошибка обработки вебхука")
         return jsonify({"status": "error"}), 500
 
 def verify_signature(payload, signature, secret):
@@ -93,43 +107,66 @@ def verify_signature(payload, signature, secret):
 
 async def send_release_notification(release):
     """Отправка уведомления в Discord"""
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        print(f"❌ Канал с ID {CHANNEL_ID} не найден")
-        return
+    try:
+        channel = bot.get_channel(CHANNEL_ID)
+        if not channel:
+            logger.error(f"❌ Канал с ID {CHANNEL_ID} не найден")
+            return
 
-    # Форматирование описания
-    description = release.get('body', 'Новая серия доступна!')
-    if len(description) > 500:
-        description = description[:500] + "..."
+        # Форматирование описания
+        description = release.get('body', 'Новая серия доступна!')
+        if len(description) > 500:
+            description = description[:500] + "..."
 
-    # Создание embed
-    embed = discord.Embed(
-        title=f"🎬 {release.get('name', 'Новый релиз')}",
-        url=release.get('html_url', ''),
-        description=description,
-        color=0x6A0DAD  # Фиолетовый цвет
-    )
-    embed.add_field(
-        name="Версия", 
-        value=release.get('tag_name', 'v1.0.0')
-    )
-    embed.set_footer(text="VexeraDubbing")
-    
-    await channel.send(
-        content="@everyone Новая серия готова к просмотру! 🎉",
-        embed=embed
-    )
+        # Создание embed
+        embed = discord.Embed(
+            title=f"🎬 {release.get('name', 'Новый релиз')}",
+            url=release.get('html_url', ''),
+            description=description,
+            color=0x6A0DAD  # Фиолетовый цвет
+        )
+        embed.add_field(
+            name="Версия", 
+            value=release.get('tag_name', 'v1.0.0')
+        )
+        embed.set_footer(text="VexeraDubbing")
+        
+        await channel.send(
+            content="@everyone Новая серия готова к просмотру! 🎉",
+            embed=embed
+        )
+        
+    except Exception as e:
+        logger.exception("❌ Ошибка отправки уведомления")
 
 def run_bot():
     """Запуск Discord бота"""
-    bot.run(DISCORD_TOKEN)
+    try:
+        bot.run(DISCORD_TOKEN)
+    except Exception as e:
+        logger.exception("🔥 Критическая ошибка бота")
+
+def run_flask():
+    """Запуск Flask сервера"""
+    try:
+        app.run(host='0.0.0.0', port=PORT, use_reloader=False)
+    except Exception as e:
+        logger.exception("🔥 Ошибка запуска Flask сервера")
 
 if __name__ == "__main__":
+    # Настройка логирования в файл
+    file_handler = logging.FileHandler('bot.log')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    logger.addHandler(file_handler)
+    
+    logger.info("🚀 Запуск приложения...")
+    
     # Запуск Discord бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     
-    # Запуск Flask сервера
-    app.run(host='0.0.0.0', port=PORT, use_reloader=False)
+    # Запуск Flask сервера в основном потоке
+    run_flask()
