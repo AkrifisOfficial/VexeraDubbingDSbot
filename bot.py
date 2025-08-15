@@ -7,7 +7,6 @@ import hmac
 import hashlib
 import asyncio
 import logging
-import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -26,9 +25,6 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
 GITHUB_WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET')
 PORT = int(os.getenv('PORT', 8000))
 
-# Получаем список разрешённых ID ролей из переменной окружения
-ALLOWED_ROLE_IDS = list(map(int, os.getenv('ALLOWED_ROLE_IDS', '').split(','))) if os.getenv('ALLOWED_ROLE_IDS') else []
-
 # Проверка переменных
 if not DISCORD_TOKEN:
     logger.critical("❌ DISCORD_TOKEN не установлен!")
@@ -38,12 +34,9 @@ if not CHANNEL_ID:
     logger.critical("❌ CHANNEL_ID не установлен!")
     raise ValueError("ID канала не установлен")
 
-logger.info(f"Разрешённые роли: {ALLOWED_ROLE_IDS}")
-
 # Инициализация
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # Для проверки ролей участников
 
 bot = commands.Bot(
     command_prefix='!', 
@@ -67,16 +60,10 @@ async def on_ready():
     except Exception as e:
         logger.error(f"❌ Ошибка синхронизации: {e}")
 
-# Проверка прав доступа
-def has_permission(interaction: discord.Interaction) -> bool:
-    """Проверяет права пользователя"""
-    # Администраторы сервера всегда имеют доступ
-    if interaction.user.guild_permissions.administrator:
-        return True
-    
-    # Проверка разрешённых ролей
-    user_role_ids = [role.id for role in interaction.user.roles]
-    return any(role_id in user_role_ids for role_id in ALLOWED_ROLE_IDS)
+# Проверка прав администратора
+def is_admin(interaction: discord.Interaction) -> bool:
+    """Проверяет, является ли пользователь администратором"""
+    return interaction.user.guild_permissions.administrator
 
 # Команда проверки
 @bot.tree.command(name="ping", description="Проверка работы бота")
@@ -87,48 +74,31 @@ async def ping(interaction: discord.Interaction):
         ephemeral=True
     )
 
-# Команда для проверки прав
-@bot.tree.command(name="check_permission", description="Проверить свои права")
-async def check_permission(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    if has_permission(interaction):
-        await interaction.followup.send(
-            "✅ У вас есть права администратора!",
-            ephemeral=True
-        )
-    else:
-        await interaction.followup.send(
-            "❌ У вас нет прав администратора!",
-            ephemeral=True
-        )
-
 # Тестовая отправка (только для админов)
 @bot.tree.command(name="test_send", description="Тест отправки сообщения (только админы)")
-@app_commands.check(has_permission)
+@app_commands.check(is_admin)
 async def test_send(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
     try:
         channel = bot.get_channel(CHANNEL_ID)
         if not channel:
-            await interaction.followup.send("❌ Канал не найден!", ephemeral=True)
+            await interaction.response.send_message("❌ Канал не найден!", ephemeral=True)
             return
         
         await channel.send("✅ Тестовое сообщение от бота!")
-        await interaction.followup.send("Сообщение отправлено!", ephemeral=True)
+        await interaction.response.send_message("Сообщение отправлено!", ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"Ошибка: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"Ошибка: {str(e)}", ephemeral=True)
 
 # Ручная отправка (только для админов)
 @bot.tree.command(name="announce", description="Отправить сообщение в канал (только админы)")
-@app_commands.check(has_permission)
+@app_commands.check(is_admin)
 async def announce(interaction: discord.Interaction, message: str):
-    await interaction.response.defer(ephemeral=True)
     try:
         channel = bot.get_channel(CHANNEL_ID)
         await channel.send(message)
-        await interaction.followup.send("✅ Сообщение отправлено!", ephemeral=True)
+        await interaction.response.send_message("✅ Сообщение отправлено!", ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 # Обработка ошибок для команд админов
 @test_send.error
@@ -136,7 +106,7 @@ async def announce(interaction: discord.Interaction, message: str):
 async def admin_commands_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
-            "❌ Эта команда доступна только администраторам сервера и доверенным ролям!",
+            "❌ Эта команда доступна только администраторам сервера!",
             ephemeral=True
         )
     else:
@@ -214,26 +184,8 @@ async def send_release_notification(release):
     except Exception as e:
         logger.error(f"❌ Ошибка отправки: {e}")
 
-async def main():
-    await bot.start(DISCORD_TOKEN)
-
 def run_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        loop.run_until_complete(bot.close())
-    finally:
-        loop.close()
+    bot.run(DISCORD_TOKEN)
 
 if __name__ == "__main__":
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(
-        target=lambda: app.run(host='0.0.0.0', port=PORT, use_reloader=False)
-    )
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Запускаем бота в основном потоке
     run_bot()
