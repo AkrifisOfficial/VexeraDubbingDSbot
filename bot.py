@@ -60,6 +60,11 @@ async def on_ready():
     except Exception as e:
         logger.error(f"❌ Ошибка синхронизации: {e}")
 
+# Проверка прав администратора
+def is_admin(interaction: discord.Interaction) -> bool:
+    """Проверяет, является ли пользователь администратором"""
+    return interaction.user.guild_permissions.administrator
+
 # Команда проверки
 @bot.tree.command(name="ping", description="Проверка работы бота")
 async def ping(interaction: discord.Interaction):
@@ -69,8 +74,9 @@ async def ping(interaction: discord.Interaction):
         ephemeral=True
     )
 
-# Тестовая отправка
-@bot.tree.command(name="test_send", description="Тест отправки сообщения")
+# Тестовая отправка (только для админов)
+@bot.tree.command(name="test_send", description="Тест отправки сообщения (только админы)")
+@app_commands.check(is_admin)
 async def test_send(interaction: discord.Interaction):
     try:
         channel = bot.get_channel(CHANNEL_ID)
@@ -83,8 +89,9 @@ async def test_send(interaction: discord.Interaction):
     except Exception as e:
         await interaction.response.send_message(f"Ошибка: {str(e)}", ephemeral=True)
 
-# Ручная отправка
-@bot.tree.command(name="announce", description="Отправить сообщение в канал")
+# Ручная отправка (только для админов)
+@bot.tree.command(name="announce", description="Отправить сообщение в канал (только админы)")
+@app_commands.check(is_admin)
 async def announce(interaction: discord.Interaction, message: str):
     try:
         channel = bot.get_channel(CHANNEL_ID)
@@ -92,6 +99,21 @@ async def announce(interaction: discord.Interaction, message: str):
         await interaction.response.send_message("✅ Сообщение отправлено!", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
+
+# Обработка ошибок для команд админов
+@test_send.error
+@announce.error
+async def admin_commands_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.CheckFailure):
+        await interaction.response.send_message(
+            "❌ Эта команда доступна только администраторам сервера!",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"⚠️ Произошла ошибка: {str(error)}",
+            ephemeral=True
+        )
 
 # Обработка GitHub вебхука
 @app.route('/webhook', methods=['POST'])
