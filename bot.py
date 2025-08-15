@@ -25,6 +25,9 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
 GITHUB_WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET')
 PORT = int(os.getenv('PORT', 8000))
 
+# Получаем список разрешённых ID ролей из переменной окружения
+ALLOWED_ROLE_IDS = list(map(int, os.getenv('ALLOWED_ROLE_IDS', '').split(','))) if os.getenv('ALLOWED_ROLE_IDS') else []
+
 # Проверка переменных
 if not DISCORD_TOKEN:
     logger.critical("❌ DISCORD_TOKEN не установлен!")
@@ -34,9 +37,12 @@ if not CHANNEL_ID:
     logger.critical("❌ CHANNEL_ID не установлен!")
     raise ValueError("ID канала не установлен")
 
+logger.info(f"Разрешённые роли: {ALLOWED_ROLE_IDS}")
+
 # Инициализация
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True  # Для проверки ролей участников
 
 bot = commands.Bot(
     command_prefix='!', 
@@ -60,10 +66,16 @@ async def on_ready():
     except Exception as e:
         logger.error(f"❌ Ошибка синхронизации: {e}")
 
-# Проверка прав администратора
-def is_admin(interaction: discord.Interaction) -> bool:
-    """Проверяет, является ли пользователь администратором"""
-    return interaction.user.guild_permissions.administrator
+# Проверка прав доступа
+def has_permission(interaction: discord.Interaction) -> bool:
+    """Проверяет права пользователя"""
+    # Администраторы сервера всегда имеют доступ
+    if interaction.user.guild_permissions.administrator:
+        return True
+    
+    # Проверка разрешённых ролей
+    user_role_ids = [role.id for role in interaction.user.roles]
+    return any(role_id in user_role_ids for role_id in ALLOWED_ROLE_IDS)
 
 # Команда проверки
 @bot.tree.command(name="ping", description="Проверка работы бота")
@@ -74,9 +86,23 @@ async def ping(interaction: discord.Interaction):
         ephemeral=True
     )
 
+# Команда для проверки прав
+@bot.tree.command(name="check_permission", description="Проверить свои права")
+async def check_permission(interaction: discord.Interaction):
+    if has_permission(interaction):
+        await interaction.response.send_message(
+            "✅ У вас есть права администратора!",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            "❌ У вас нет прав администратора!",
+            ephemeral=True
+        )
+
 # Тестовая отправка (только для админов)
 @bot.tree.command(name="test_send", description="Тест отправки сообщения (только админы)")
-@app_commands.check(is_admin)
+@app_commands.check(has_permission)
 async def test_send(interaction: discord.Interaction):
     try:
         channel = bot.get_channel(CHANNEL_ID)
@@ -91,7 +117,7 @@ async def test_send(interaction: discord.Interaction):
 
 # Ручная отправка (только для админов)
 @bot.tree.command(name="announce", description="Отправить сообщение в канал (только админы)")
-@app_commands.check(is_admin)
+@app_commands.check(has_permission)
 async def announce(interaction: discord.Interaction, message: str):
     try:
         channel = bot.get_channel(CHANNEL_ID)
@@ -106,7 +132,7 @@ async def announce(interaction: discord.Interaction, message: str):
 async def admin_commands_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
-            "❌ Эта команда доступна только администраторам сервера!",
+            "❌ Эта команда доступна только администраторам сервера и доверенным ролям!",
             ephemeral=True
         )
     else:
