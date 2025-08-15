@@ -7,7 +7,6 @@ import hmac
 import hashlib
 import asyncio
 import logging
-import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -38,7 +37,6 @@ if not CHANNEL_ID:
 # Инициализация
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # Для проверки прав пользователей
 
 bot = commands.Bot(
     command_prefix='!', 
@@ -80,33 +78,27 @@ async def ping(interaction: discord.Interaction):
 @bot.tree.command(name="test_send", description="Тест отправки сообщения (только админы)")
 @app_commands.check(is_admin)
 async def test_send(interaction: discord.Interaction):
-    # Сообщаем Discord, что начали обработку команды
-    await interaction.response.defer(ephemeral=True)
-    
     try:
         channel = bot.get_channel(CHANNEL_ID)
         if not channel:
-            await interaction.followup.send("❌ Канал не найден!", ephemeral=True)
+            await interaction.response.send_message("❌ Канал не найден!", ephemeral=True)
             return
         
         await channel.send("✅ Тестовое сообщение от бота!")
-        await interaction.followup.send("Сообщение отправлено!", ephemeral=True)
+        await interaction.response.send_message("Сообщение отправлено!", ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"Ошибка: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"Ошибка: {str(e)}", ephemeral=True)
 
 # Ручная отправка (только для админов)
 @bot.tree.command(name="announce", description="Отправить сообщение в канал (только админы)")
 @app_commands.check(is_admin)
 async def announce(interaction: discord.Interaction, message: str):
-    # Сообщаем Discord, что начали обработку команды
-    await interaction.response.defer(ephemeral=True)
-    
     try:
         channel = bot.get_channel(CHANNEL_ID)
         await channel.send(message)
-        await interaction.followup.send("✅ Сообщение отправлено!", ephemeral=True)
+        await interaction.response.send_message("✅ Сообщение отправлено!", ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 # Обработка ошибок для команд админов
 @test_send.error
@@ -192,19 +184,8 @@ async def send_release_notification(release):
     except Exception as e:
         logger.error(f"❌ Ошибка отправки: {e}")
 
-def run_flask():
-    """Запуск Flask сервера"""
-    app.run(host='0.0.0.0', port=PORT, use_reloader=False)
-
 def run_bot():
-    """Запуск Discord бота"""
     bot.run(DISCORD_TOKEN)
 
 if __name__ == "__main__":
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Запускаем бота в основном потоке
-    run_bot() 
+    run_bot()
